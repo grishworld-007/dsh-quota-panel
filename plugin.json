@@ -1,0 +1,52 @@
+{
+  "name": "dsh-quota-panel",
+  "displayName": "模型配额面板",
+  "description": "DeepSeek Harness (DSH) 动态 Cordis 插件：在 Web GUI 右上角悬浮面板实时展示各家模型 provider 的套餐余额与配额剩余（智谱 GLM 5小时/周、火山方舟 Ark 5小时/周/月、MiniMax 区间/周、DeepSeek 余额），统一按剩余百分比渲染进度条，60s 自动刷新。",
+  "kind": "dsh-dynamic-cordis-plugin",
+  "idPrefix": "quota",
+  "halves": {
+    "host": "./host.js",
+    "client": "./client.js"
+  },
+  "clientInject": ["timer"],
+  "clientSlot": "shell.overlay",
+  "handler": "quota",
+  "refreshIntervalMs": 60000,
+  "providers": [
+    {
+      "id": "zai-coding-cn",
+      "label": "智谱/GLM 配额",
+      "endpoint": "GET {base}/api/monitor/usage/quota/limit",
+      "auth": "Bearer API Key",
+      "credentialRefs": ["ZAI_CODING_CN_API_KEY"],
+      "windows": ["5小时窗口", "周配额"]
+    },
+    {
+      "id": "ark",
+      "label": "方舟/Ark 套餐",
+      "endpoint": "POST https://open.volcengineapi.com/?Action={GetAFPUsage|GetCodingPlanUsage}&Region=cn-beijing&Version=2024-01-01",
+      "auth": "火山引擎签名 V4（AK/SK，控制面 OpenAPI，与模型推理 API Key 是两套凭据）",
+      "credentialRefs": ["VOLC_ACCESSKEY", "VOLC_SECRETKEY"],
+      "fallbackCredentialRefs": ["ARK_ACCESS_KEY_ID", "ARK_SECRET_ACCESS_KEY"],
+      "windows": ["5小时窗口", "周配额", "月配额"]
+    },
+    {
+      "id": "minimax-cn",
+      "label": "MiniMax 套餐",
+      "endpoint": "GET https://api.minimaxi.com/v1/token_plan/remains",
+      "auth": "Bearer API Key",
+      "credentialRefs": ["MINIMAX_CN_API_KEY"],
+      "windows": ["区间剩余", "周剩余"],
+      "note": "自动过滤 video 通道，仅显示 general（文本套餐）"
+    },
+    {
+      "id": "deepseek-official",
+      "label": "DeepSeek 余额",
+      "endpoint": "GET https://api.deepseek.com/user/balance",
+      "auth": "Bearer API Key",
+      "credentialRefs": ["DEEPSEEK_API_KEY"],
+      "windows": ["账户余额（按币种合计）"]
+    }
+  ],
+  "privacy": "所有密钥通过 DSH credentials 服务读取，仅注入 curl 子进程环境变量；不写入命令行文本、日志，也不回传给浏览器。"
+}
