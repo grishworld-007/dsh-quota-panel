@@ -259,6 +259,7 @@ return {
           intervalRemainPct: m.current_interval_remaining_percent != null ? Math.round(parseFloat(m.current_interval_remaining_percent) * 10) / 10 : null,
           weeklyRemainPct: m.current_weekly_remaining_percent != null ? Math.round(parseFloat(m.current_weekly_remaining_percent) * 10) / 10 : null,
           weeklyEndText: fmtReset(m.weekly_end_time),
+          intervalEndText: fmtReset(m.end_time),
         })
       }
       return { ok: true, models: models }

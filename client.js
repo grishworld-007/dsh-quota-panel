@@ -62,9 +62,11 @@ return {
       const providers = (data && data.providers) || []
       const deflt = (data && data.default) || null
 
-      // 统一：条与数字都表示「剩余百分比」（与 MiniMax 风格一致）
-      function remainBar(label, pct, key) {
-        return React.createElement('div', { className: 'q-row', key: key },
+      // 统一：条与数字都表示「剩余百分比」（与 MiniMax 风格一致）；tip 为悬停提示（重置时间等）
+      function remainBar(label, pct, key, tip) {
+        const props = { className: 'q-row', key: key }
+        if (tip) props.title = tip
+        return React.createElement('div', props,
           React.createElement('span', { className: 'q-row-label' }, label),
           React.createElement('div', { className: 'q-bar' },
             React.createElement('div', { className: 'q-fill', style: { width: clampPct(pct) + '%', background: remainColor(pct) } }),
@@ -83,30 +85,41 @@ return {
           body = React.createElement('div', { className: 'q-empty' }, '查询中…')
         } else if (p.kind === 'glm') {
           const d = p.data
-          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i) })
+          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, lim.resetAtText ? ('重置 ' + lim.resetAtText) : null) })
           body = React.createElement('div', { className: 'q-body' }, rows.length ? rows : React.createElement('div', { className: 'q-empty' }, '无配额数据'))
         } else if (p.kind === 'ark') {
           const d = p.data
-          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i) })
+          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, lim.resetAtText ? ('重置 ' + lim.resetAtText) : null) })
           body = React.createElement('div', { className: 'q-body' }, rows.length ? rows : React.createElement('div', { className: 'q-empty' }, '无配额数据'))
         } else if (p.kind === 'deepseek') {
           const d = p.data
+          let balTip = null
+          if (Array.isArray(d.parts) && d.parts.length) {
+            balTip = d.parts.map(function (b) {
+              return (b.currency || 'CNY') + ' 合计 ' + b.total + (b.granted != null && b.toppedUp != null ? '（赠送 ' + b.granted + ' / 充值 ' + b.toppedUp + '）' : '')
+            }).join('；')
+          }
+          const balProps = { className: 'q-baltotal' }
+          if (balTip) balProps.title = balTip
           body = React.createElement('div', { className: 'q-body' },
-            React.createElement('div', { className: 'q-baltotal' }, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total)),
+            React.createElement('div', balProps, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total)),
           )
         } else if (p.kind === 'minimax') {
           const d = p.data
           const rows = (d.models || []).map(function (m, i) {
             return React.createElement('div', { className: 'q-mm', key: i },
-              React.createElement('div', { className: 'q-mm-name' }, m.name),
-              m.intervalRemainPct != null ? remainBar('区间', m.intervalRemainPct) : null,
-              m.weeklyRemainPct != null ? remainBar('周', m.weeklyRemainPct) : null,
+              React.createElement('div', { className: 'q-mm-name', title: m.weeklyEndText ? ('周重置 ' + m.weeklyEndText) : undefined }, m.name),
+              m.intervalRemainPct != null ? remainBar('区间', m.intervalRemainPct, null, m.intervalEndText ? ('区间重置 ' + m.intervalEndText) : null) : null,
+              m.weeklyRemainPct != null ? remainBar('周', m.weeklyRemainPct, null, m.weeklyEndText ? ('周重置 ' + m.weeklyEndText) : null) : null,
             )
           })
           body = React.createElement('div', { className: 'q-body' }, rows)
         }
+        const modelsTip = (p.models && p.models.length) ? ('模型：' + p.models.join(' · ')) : null
+        const headProps = { className: 'q-cardhead' }
+        if (modelsTip) headProps.title = modelsTip
         return React.createElement('div', { className: 'q-card', key: p.id },
-          React.createElement('div', { className: 'q-cardhead' },
+          React.createElement('div', headProps,
             React.createElement('span', { className: 'q-prov' }, (isDefault ? '● ' : '') + p.id),
             React.createElement('span', { className: 'q-kind' }, kindLabel),
           ),
