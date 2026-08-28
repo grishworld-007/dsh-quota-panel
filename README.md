@@ -63,24 +63,49 @@ refs:
 
 ## 使用（在 DSH 会话里加载）
 
-本仓库是**动态 Cordis 插件**的源码：`host.js` / `client.js` 的文件内容分别是 `cordis_define` 的 `code.host` / `code.client` 参数值（纯 JS 函数体，`return { ... }`）。
+本仓库支持两种加载方式，代码同源：
 
-对 DSH 的模型代理（或具备 `cordis_define` 工具的会话）说：
+### 方式 A：持久化静态行（推荐，重启后面板自动出现）
+
+仓库根目录**就是一个可安装的 Cordis 双面插件包**：`lib/index.js`（宿主半，node:crypto 签名 + 原生 fetch 采集，每 60s 刷新，经 `webServer` 服务暴露 `/quota-panel/data.json`）与 `lib/client.js`（浏览器半，`dsh.client` boot-graph bundle，注册 `shell.overlay` 面板并 fetch 数据路由）。
+
+安装（一次性）：
+
+```sh
+# 1) 链接进 DSH 共享 node_modules（部署以本仓库为真源）
+ln -sfn /path/to/dsh-quota-panel ~/.dsh/profiles/node_modules/quota-panel
+
+# 2) 在 profile 的 cordis.patch.yml 追加一行 insert：
+#    - insert:
+#        - id: quota-panel
+#          name: quota-panel
+
+# 3) 重启 dsh web（改插件集需重启生效）
+~/.dsh/restart-dsh-web.sh   # 或你惯用的重启方式
+```
+
+之后每次启动面板自动出现，无需任何会话操作；`config` 可选 `intervalMs`（默认 60000）与 `routePath`（默认 `/quota-panel/data.json`）。
+
+### 方式 B：动态 Cordis 插件（会话内试用）
+
+`dynamic/host.js` / `dynamic/client.js` 是 `cordis_define` 的 `code.host` / `code.client` 参数值（纯 JS 函数体）。对 DSH 的模型代理说：
 
 > 用 cordis 定义一个新插件，idPrefix 用 `quota`，name「模型配额面板」，
-> code.host 取本仓库 `host.js` 的内容，code.client 取 `client.js` 的内容，
+> code.host 取本仓库 `dynamic/host.js` 的内容，code.client 取 `dynamic/client.js` 的内容，
 > 然后运行（run）它并在授权提示里允许。
 
 文件结构：
 
 ```
-host.js      # Host 半：纯 JS SHA-256/HMAC、火山签名 V4、四家配额查询（含各窗口重置毫秒时间戳）、harness.handle('quota')
-client.js    # Client 半：shell.overlay 窄版悬浮面板（统一剩余进度条、悬停重置倒计时、60s 刷新）
-plugin.json  # 元数据清单（provider/端点/凭据映射）
+package.json      # 包声明：exports["."]/["./client"]/["./package.json"] + dsh.client(platform:web)
+lib/index.js      # 宿主半（静态行）：node:crypto 火山签名 V4、四家配额采集、webServer 数据路由、60s 定时
+lib/client.js     # 浏览器半（静态行）：ModuleLoader bundle，shell.overlay 面板，fetch 数据路由
+dynamic/host.js   # 动态版宿主半（沙箱内置纯 JS SHA/HMAC + shell/curl，harness.handle RPC）
+dynamic/client.js # 动态版浏览器半（host.call RPC）
+plugin.json       # 元数据清单（provider/端点/凭据映射）
 ```
 
-依赖的 Host 服务：`shell`、`credentials`（必需），`settings`、`llm`、`sandboxPolicy`（可选，缺失时优雅降级）。
-Client 依赖：`timer`（inject）、`slots`、`React`、`host`、`styles`。
+依赖：静态宿主半 inject `webServer`、`timer`，可选消费 `credentials` / `settings` / `llm`；浏览器半 inject `timer`，消费 `slots`。动态版依赖见 `dynamic/` 文件头。
 
 ## 兼容性
 

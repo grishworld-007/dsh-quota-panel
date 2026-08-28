@@ -1,0 +1,19 @@
+{
+  "name": "quota-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DSH persistent dual-face plugin: host half collects GLM/Ark/MiniMax/DeepSeek quotas every 60s and serves /quota-panel/data.json; browser half (dsh.client bundle) renders the shell.overlay panel.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": ["timer"]
+    }
+  }
+}

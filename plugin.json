@@ -10,6 +10,13 @@
   },
   "clientInject": ["timer"],
   "clientSlot": "shell.overlay",
+  "install": {
+    "mode": "static-composition-row",
+    "package": "~/.dsh/profiles/node_modules/quota-panel (symlink → this repo)",
+    "patchRow": "- insert: [ { id: quota-panel, name: quota-panel } ]",
+    "dataRoute": "/quota-panel/data.json",
+    "effect": "panel appears on every page load after a dsh-web restart; no session action"
+  },
   "panel": {
     "width": 200,
     "maxHeightVh": 44,
