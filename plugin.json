@@ -10,8 +10,19 @@
   },
   "clientInject": ["timer"],
   "clientSlot": "shell.overlay",
+  "panel": {
+    "width": 200,
+    "maxHeightVh": 44,
+    "refreshIntervalMs": 60000,
+    "barSemantics": "remaining-percent",
+    "hover": {
+      "providerCard": "该 provider 各窗口重置倒计时汇总",
+      "row": "该行重置倒计时 + 绝对时间",
+      "providerName": "模型清单",
+      "deepseekBalance": "各币种赠送/充值分项"
+    }
+  },
   "handler": "quota",
-  "refreshIntervalMs": 60000,
   "providers": [
     {
       "id": "zai-coding-cn",

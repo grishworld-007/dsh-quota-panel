@@ -14,6 +14,18 @@
 - provider / 模型清单从 DSH 设置 `llm-pi-ai` 动态读取，改配置后面板自动跟随
 - 当前默认模型所在 provider 以 `●` 标记（读自 `agent-default-model`）
 - 手动 `⟳` 刷新、`−` 收起成小胶囊、`＋` 展开；深色模式自适应
+- **紧凑窄版**：宽 200px、`max-height:44vh`，内容超出列表内滚动
+
+## 悬停提示（重置倒计时）
+
+| 悬停位置 | 显示 |
+|---|---|
+| provider 卡片区域（如 GLM 卡） | 该 provider 各窗口的重置倒计时汇总：`zai-coding-cn 重置倒计时 — 5小时窗口：2小时13分后；周配额：1天3小时后` |
+| 单条进度行 | 该行倒计时 + 绝对时间：`重置倒计时 2小时13分后（8-28 21:30）` |
+| provider 名字 | 该 provider 的模型清单 |
+| DeepSeek 余额行 | 各币种赠送 / 充值分项 |
+
+倒计时格式：`X天X小时后` / `X小时X分后` / `X分后` / `已重置`，随 60s 刷新自动更新（宿主下发各窗口的毫秒时间戳 `resetAtMs` / `intervalEndMs` / `weeklyEndMs`，客户端用 `Date.now()` 换算）。
 
 ## 数据源与鉴权
 
@@ -62,8 +74,8 @@ refs:
 文件结构：
 
 ```
-host.js      # Host 半：纯 JS SHA-256/HMAC、火山签名 V4、四家配额查询、harness.handle('quota')
-client.js    # Client 半：shell.overlay 悬浮面板（React.createElement、60s 刷新、统一剩余进度条）
+host.js      # Host 半：纯 JS SHA-256/HMAC、火山签名 V4、四家配额查询（含各窗口重置毫秒时间戳）、harness.handle('quota')
+client.js    # Client 半：shell.overlay 窄版悬浮面板（统一剩余进度条、悬停重置倒计时、60s 刷新）
 plugin.json  # 元数据清单（provider/端点/凭据映射）
 ```
 
