@@ -15,7 +15,7 @@ return {
       '.q-card{padding:4px 10px;border-top:1px solid var(--q-border)}' +
       '.q-card:first-child{border-top:none}' +
       '.q-cardhead{display:flex;align-items:center;gap:6px}' +
-      '.q-prov{font-weight:600;font-size:11.5px}' +
+      '.q-prov{font-weight:600;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.q-kind{font-size:9.5px;color:var(--q-muted);background:var(--q-hover);border-radius:999px;padding:0 6px;line-height:1.5}' +
       '.q-body{margin-top:1px}' +
       '.q-row{display:flex;align-items:center;gap:6px;margin:3px 0}' +
@@ -37,6 +37,24 @@ return {
       if (p <= 30) return '#ef4444'
       if (p <= 70) return '#f59e0b'
       return '#10b981'
+    }
+    function countdownText(ms) {
+      if (ms == null) return null
+      const diff = ms - Date.now()
+      if (diff <= 0) return '已重置'
+      const mins = Math.floor(diff / 60000)
+      const d = Math.floor(mins / 1440)
+      const h = Math.floor((mins % 1440) / 60)
+      const m = mins % 60
+      if (d > 0) return d + '天' + h + '小时后'
+      if (h > 0) return h + '小时' + m + '分后'
+      return m + '分后'
+    }
+    function resetTip(ms, text) {
+      const cd = countdownText(ms)
+      if (cd == null && text == null) return null
+      if (cd != null && text != null) return '重置倒计时 ' + cd + '（' + text + '）'
+      return cd != null ? ('重置倒计时 ' + cd) : ('重置 ' + text)
     }
 
     function Panel() {
@@ -76,7 +94,7 @@ return {
       }
 
       function card(p) {
-        const kindLabel = { glm: '智谱/GLM 配额', deepseek: 'DeepSeek 余额', minimax: 'MiniMax 套餐', ark: '方舟/Ark 套餐', unknown: '未识别' }[p.kind] || p.kind
+        const kindLabel = { glm: 'GLM', deepseek: '余额', minimax: 'MiniMax', ark: 'Ark', unknown: '?' }[p.kind] || p.kind
         const isDefault = deflt && deflt.provider === p.id
         let body = null
         if (p.error) {
@@ -85,47 +103,61 @@ return {
           body = React.createElement('div', { className: 'q-empty' }, '查询中…')
         } else if (p.kind === 'glm') {
           const d = p.data
-          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, lim.resetAtText ? ('重置 ' + lim.resetAtText) : null) })
+          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, resetTip(lim.resetAtMs, lim.resetAtText)) })
           body = React.createElement('div', { className: 'q-body' }, rows.length ? rows : React.createElement('div', { className: 'q-empty' }, '无配额数据'))
         } else if (p.kind === 'ark') {
           const d = p.data
-          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, lim.resetAtText ? ('重置 ' + lim.resetAtText) : null) })
+          const rows = (d.limits || []).map(function (lim, i) { return remainBar(lim.label, lim.remainPct, i, resetTip(lim.resetAtMs, lim.resetAtText)) })
           body = React.createElement('div', { className: 'q-body' }, rows.length ? rows : React.createElement('div', { className: 'q-empty' }, '无配额数据'))
         } else if (p.kind === 'deepseek') {
           const d = p.data
-          const ts = d.todaySpend
-          let spendText = ''
-          if (ts && ts.value != null) spendText = ' · 今日 ¥' + String(ts.value)
           let balTip = null
           if (Array.isArray(d.parts) && d.parts.length) {
             balTip = d.parts.map(function (b) {
               return (b.currency || 'CNY') + ' 合计 ' + b.total + (b.granted != null && b.toppedUp != null ? '（赠送 ' + b.granted + ' / 充值 ' + b.toppedUp + '）' : '')
             }).join('；')
           }
-          if (ts) {
-            const src = ts.source === 'official' ? '今日消费来自平台官方账单' : ('自 ' + (ts.sinceText || '--:--') + ' 起按余额差估算（重启后重新基线）')
-            balTip = balTip ? (balTip + '；' + src) : src
-          }
           const balProps = { className: 'q-baltotal' }
           if (balTip) balProps.title = balTip
           body = React.createElement('div', { className: 'q-body' },
-            React.createElement('div', balProps, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total) + spendText),
+            React.createElement('div', balProps, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total)),
           )
         } else if (p.kind === 'minimax') {
           const d = p.data
           const rows = (d.models || []).map(function (m, i) {
             return React.createElement('div', { className: 'q-mm', key: i },
-              React.createElement('div', { className: 'q-mm-name', title: m.weeklyEndText ? ('周重置 ' + m.weeklyEndText) : undefined }, m.name),
-              m.intervalRemainPct != null ? remainBar('区间', m.intervalRemainPct, null, m.intervalEndText ? ('区间重置 ' + m.intervalEndText) : null) : null,
-              m.weeklyRemainPct != null ? remainBar('周', m.weeklyRemainPct, null, m.weeklyEndText ? ('周重置 ' + m.weeklyEndText) : null) : null,
+              React.createElement('div', { className: 'q-mm-name' }, m.name),
+              m.intervalRemainPct != null ? remainBar('区间', m.intervalRemainPct, null, resetTip(m.intervalEndMs, m.intervalEndText)) : null,
+              m.weeklyRemainPct != null ? remainBar('周', m.weeklyRemainPct, null, resetTip(m.weeklyEndMs, m.weeklyEndText)) : null,
             )
           })
           body = React.createElement('div', { className: 'q-body' }, rows)
         }
+        // 卡片级悬停：汇总该 provider 各窗口的重置倒计时
+        let cardTip = null
+        if (p.data && !p.error) {
+          const parts = []
+          if (p.kind === 'glm' || p.kind === 'ark') {
+            const lims = p.data.limits || []
+            for (const lim of lims) {
+              const cd = countdownText(lim.resetAtMs)
+              if (cd != null) parts.push(lim.label + '：' + cd)
+            }
+          } else if (p.kind === 'minimax') {
+            for (const m of (p.data.models || [])) {
+              const a = countdownText(m.intervalEndMs)
+              const b = countdownText(m.weeklyEndMs)
+              if (a != null || b != null) parts.push(m.name + '：' + (a != null ? ('区间 ' + a) : '') + (a != null && b != null ? '；' : '') + (b != null ? ('周 ' + b) : ''))
+            }
+          }
+          if (parts.length) cardTip = p.id + ' 重置倒计时 — ' + parts.join('；')
+        }
         const modelsTip = (p.models && p.models.length) ? ('模型：' + p.models.join(' · ')) : null
         const headProps = { className: 'q-cardhead' }
         if (modelsTip) headProps.title = modelsTip
-        return React.createElement('div', { className: 'q-card', key: p.id },
+        const cardProps = { className: 'q-card', key: p.id }
+        if (cardTip) cardProps.title = cardTip
+        return React.createElement('div', cardProps,
           React.createElement('div', headProps,
             React.createElement('span', { className: 'q-prov' }, (isDefault ? '● ' : '') + p.id),
             React.createElement('span', { className: 'q-kind' }, kindLabel),
@@ -158,7 +190,7 @@ return {
         body = React.createElement('div', { className: 'q-list' }, providers.map(card))
       }
 
-      return React.createElement('div', { className: 'q-root', style: { width: 300 } },
+      return React.createElement('div', { className: 'q-root', style: { width: 200 } },
         header,
         body,
       )

@@ -10,9 +10,6 @@ return {
       return
     }
 
-    // DeepSeek 今日花费：日内基线（本地日），用于无平台 token 时的估算
-    let dayBaseline = null
-
     // ---- pure-JS SHA-256 / HMAC-SHA256 (Host has no crypto builtin) ----
     function sha256Bytes(data) {
       const K = new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2])
@@ -142,10 +139,16 @@ return {
       if (isNaN(d.getTime())) return String(ms)
       return (d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
     }
+    function toResetMs(v) {
+      if (v == null) return null
+      if (typeof v === 'string') { const t = Date.parse(v); return isNaN(t) ? null : t }
+      if (typeof v === 'number') { if (v <= 0) return null; return v < 1e12 ? v * 1000 : v }
+      return null
+    }
     function fmtReset(v) {
       if (v == null) return null
-      if (typeof v === 'string') { const t = Date.parse(v); return isNaN(t) ? v : fmtMs(t) }
-      if (typeof v === 'number') { if (v <= 0) return null; return fmtMs(v < 1e12 ? v * 1000 : v) }
+      const ms = toResetMs(v)
+      if (ms != null) return fmtMs(ms)
       return String(v)
     }
 
@@ -224,7 +227,7 @@ return {
         else continue
         const used = (typeof lim.percentage === 'number') ? lim.percentage : (typeof lim.percentage === 'string' ? parseFloat(lim.percentage) : null)
         const remain = used == null ? null : Math.max(0, Math.min(100, Math.round((100 - used) * 10) / 10))
-        rows.push({ label: label, usedPct: used == null ? null : Math.round(used * 10) / 10, remainPct: remain, remaining: (lim.remaining != null) ? lim.remaining : null, number: (lim.number != null) ? lim.number : null, resetAtText: fmtReset(lim.nextResetTime) })
+        rows.push({ label: label, usedPct: used == null ? null : Math.round(used * 10) / 10, remainPct: remain, remaining: (lim.remaining != null) ? lim.remaining : null, number: (lim.number != null) ? lim.number : null, resetAtMs: toResetMs(lim.nextResetTime), resetAtText: fmtReset(lim.nextResetTime) })
       }
       return { ok: true, level: data && data.level ? String(data.level) : null, limits: rows }
     }
@@ -247,40 +250,6 @@ return {
       return { ok: true, isAvailable: j.is_available !== false, total: Math.round(total * 100) / 100, parts: parts }
     }
 
-    const PLATFORM_USAGE_URL = 'https://platform.deepseek.com/api/v0/usage/cost'
-    function localDateKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) }
-    async function queryDeepseekTodayCost(token) {
-      const now = new Date()
-      const url = PLATFORM_USAGE_URL + '?month=' + (now.getMonth() + 1) + '&year=' + now.getFullYear()
-      const cmd = 'curl -sS -m 20 -H "Authorization: Bearer $QUOTA_PT" -H "Accept: application/json" -H "Origin: https://platform.deepseek.com" -H "Referer: https://platform.deepseek.com/usage" -w "__QK_STATUS__:%{http_code}" "' + url + '"'
-      const r = await runShell(cmd, { QUOTA_PT: token })
-      if (r.error) return { ok: false, error: r.error }
-      if (r.status !== 200 || !r.body) return { ok: false, error: r.stderr || ('HTTP ' + r.status) }
-      let j
-      try { j = JSON.parse(r.body) } catch (e) { return { ok: false, error: '响应非 JSON' } }
-      if (j && j.code != null && j.code !== 0) return { ok: false, error: '平台接口 code ' + j.code }
-      const biz = (j && j.data && j.data.biz_data) || null
-      const days = (biz && Array.isArray(biz.days)) ? biz.days : []
-      const todayKey = localDateKey(now)
-      let total = null
-      for (const day of days) {
-        if (!day || day.date !== todayKey) continue
-        total = 0
-        const entries = Array.isArray(day.data) ? day.data : []
-        for (const me of entries) {
-          const usages = (me && Array.isArray(me.usage)) ? me.usage : []
-          for (const u of usages) {
-            if (!u) continue
-            const v = (u.cost != null) ? parseFloat(u.cost) : ((u.amount != null) ? parseFloat(u.amount) : NaN)
-            if (!isNaN(v)) total += v
-          }
-        }
-        break
-      }
-      if (total == null) return { ok: false, error: '无今日数据' }
-      return { ok: true, todayCost: Math.round(total * 100) / 100 }
-    }
-
     async function queryMinimax(key) {
       const r = await runShell(bearerCurl('https://api.minimaxi.com/v1/token_plan/remains'), { QUOTA_KEY: key || '' })
       if (r.error) return { ok: false, error: r.error }
@@ -296,7 +265,9 @@ return {
           intervalRemainPct: m.current_interval_remaining_percent != null ? Math.round(parseFloat(m.current_interval_remaining_percent) * 10) / 10 : null,
           weeklyRemainPct: m.current_weekly_remaining_percent != null ? Math.round(parseFloat(m.current_weekly_remaining_percent) * 10) / 10 : null,
           weeklyEndText: fmtReset(m.weekly_end_time),
+          weeklyEndMs: toResetMs(m.weekly_end_time),
           intervalEndText: fmtReset(m.end_time),
+          intervalEndMs: toResetMs(m.end_time),
         })
       }
       return { ok: true, models: models }
@@ -328,7 +299,7 @@ return {
         if (!(quota > 0)) continue
         const used = parseFloat(win.Used) || 0
         const usedPct = Math.round((used / quota) * 1000) / 10
-        rows.push({ label: kv[1], usedPct: usedPct, remainPct: Math.max(0, Math.min(100, Math.round((100 - usedPct) * 10) / 10)), remaining: null, number: null, resetAtText: fmtReset(win.ResetTime) })
+        rows.push({ label: kv[1], usedPct: usedPct, remainPct: Math.max(0, Math.min(100, Math.round((100 - usedPct) * 10) / 10)), remaining: null, number: null, resetAtMs: toResetMs(win.ResetTime), resetAtText: fmtReset(win.ResetTime) })
       }
       return rows
     }
@@ -348,7 +319,8 @@ return {
         if (isNaN(used)) used = item.UsagePercent != null ? parseFloat(item.UsagePercent) : NaN
         if (isNaN(used)) used = 0
         used = Math.round(used * 10) / 10
-        rows.push({ label: label, usedPct: used, remainPct: Math.max(0, Math.min(100, Math.round((100 - used) * 10) / 10)), remaining: null, number: null, resetAtText: fmtReset(item.ResetTime != null ? item.ResetTime : item.ResetTimestamp) })
+        const raw = item.ResetTime != null ? item.ResetTime : item.ResetTimestamp
+        rows.push({ label: label, usedPct: used, remainPct: Math.max(0, Math.min(100, Math.round((100 - used) * 10) / 10)), remaining: null, number: null, resetAtMs: toResetMs(raw), resetAtText: fmtReset(raw) })
       }
       return rows
     }
@@ -442,26 +414,7 @@ return {
         const key = await resolveKey(keyEnv)
         if (!key) { entry.error = '未找到 API Key（' + keyEnv + '）'; return entry }
         if (s.kind === 'glm') { const q = await queryGlm(id, key, s.base); entry.error = q.error || null; if (q.ok) entry.data = { level: q.level, limits: q.limits } }
-        else if (s.kind === 'deepseek') {
-          const q = await queryDeepseek(key)
-          entry.error = q.error || null
-          if (q.ok) {
-            entry.data = { isAvailable: q.isAvailable, total: q.total, parts: q.parts }
-            let spend = null
-            const pt = await resolveKey('DEEPSEEK_PLATFORM_TOKEN')
-            if (pt) {
-              const c = await queryDeepseekTodayCost(pt)
-              if (c.ok) spend = { value: c.todayCost, source: 'official' }
-            }
-            if (!spend) {
-              const now = new Date()
-              const dk = localDateKey(now)
-              if (!dayBaseline || dayBaseline.date !== dk) dayBaseline = { date: dk, balance: q.total, atText: pad(now.getHours()) + ':' + pad(now.getMinutes()) }
-              spend = { value: Math.max(0, Math.round((dayBaseline.balance - q.total) * 100) / 100), source: 'estimate', sinceText: dayBaseline.atText }
-            }
-            entry.data.todaySpend = spend
-          }
-        }
+        else if (s.kind === 'deepseek') { const q = await queryDeepseek(key); entry.error = q.error || null; if (q.ok) entry.data = { isAvailable: q.isAvailable, total: q.total, parts: q.parts } }
         else if (s.kind === 'minimax') { const q = await queryMinimax(key); entry.error = q.error || null; if (q.ok) entry.data = { models: q.models } }
         return entry
       }))
