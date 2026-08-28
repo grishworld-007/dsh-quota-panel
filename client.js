@@ -93,16 +93,23 @@ return {
           body = React.createElement('div', { className: 'q-body' }, rows.length ? rows : React.createElement('div', { className: 'q-empty' }, '无配额数据'))
         } else if (p.kind === 'deepseek') {
           const d = p.data
+          const ts = d.todaySpend
+          let spendText = ''
+          if (ts && ts.value != null) spendText = ' · 今日 ¥' + String(ts.value)
           let balTip = null
           if (Array.isArray(d.parts) && d.parts.length) {
             balTip = d.parts.map(function (b) {
               return (b.currency || 'CNY') + ' 合计 ' + b.total + (b.granted != null && b.toppedUp != null ? '（赠送 ' + b.granted + ' / 充值 ' + b.toppedUp + '）' : '')
             }).join('；')
           }
+          if (ts) {
+            const src = ts.source === 'official' ? '今日消费来自平台官方账单' : ('自 ' + (ts.sinceText || '--:--') + ' 起按余额差估算（重启后重新基线）')
+            balTip = balTip ? (balTip + '；' + src) : src
+          }
           const balProps = { className: 'q-baltotal' }
           if (balTip) balProps.title = balTip
           body = React.createElement('div', { className: 'q-body' },
-            React.createElement('div', balProps, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total)),
+            React.createElement('div', balProps, (d.isAvailable ? '' : '（不可用）') + '余额 ¥' + String(d.total) + spendText),
           )
         } else if (p.kind === 'minimax') {
           const d = p.data
